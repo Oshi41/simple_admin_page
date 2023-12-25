@@ -1,0 +1,35 @@
+{
+  "name": "robomarket_backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "run": "ts-node src/index.ts"
+  },
+  "keywords": [],
+  "author": "Oshi41",
+  "license": "MIT",
+  "dependencies": {
+    "express": "latest",
+    "lodash": "latest",
+    "joi": "latest",
+    "@seald-io/nedb": "latest",
+    "country-state-city": "latest",
+    "google-libphonenumber": "latest",
+    "node-fetch": "2.7.0"
+  },
+  "devDependencies": {
+    "@types/express": "latest",
+    "@types/lodash": "latest",
+    "@types/node": "latest",
+    "@types/mocha": "latest",
+    "@types/joi": "latest",
+    "@types/google-libphonenumber": "latest",
+    "@types/node-fetch": "latest",
+    "@types/sinon": "latest",
+    "mocha": "latest",
+    "ts-node": "latest",
+    "typescript": "latest",
+    "sinon": "latest"
+  }
+}

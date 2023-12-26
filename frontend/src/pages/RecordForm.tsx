@@ -51,11 +51,17 @@ export function RecordForm(props: RecordFormProps): React.ReactElement {
         return mask;
     }, [editing.country]);
 
-    const validate = useCallback((strict: boolean) => {
+    const validate = useCallback(async (strict: boolean) => {
         const errors: Partial<Record & { email2: string }> = {};
-
-        setErrors(errors);
-    }, [editing]);
+        try {
+            if (email2 !== editing.email)
+                errors.email2 = 'You should repeat email';
+        } catch (e) {
+            console.log(e);
+        } finally {
+            setErrors(errors);
+        }
+    }, [editing, email2]);
 
     useEffect(function clear_phone() {
         if (editing.phone) {
@@ -65,9 +71,10 @@ export function RecordForm(props: RecordFormProps): React.ReactElement {
             }));
         }
     }, [editing?.country]);
-    useEffect(function validation() {
 
-    }, [editing]);
+    useEffect(function validation() {
+        return void validate(false);
+    }, [validate]);
     return <FormControl component={Stack} direction='column' spacing='8px' padding='12px'>
         <h1>{is_editing ? `Editing ${source?.name} record` : 'Creating new record'}</h1>
         <TextField

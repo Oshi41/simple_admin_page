@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "run": "ts-node src/index.ts"
+    "run": "ts-node src/index.ts",
+    "test": "mocha"
   },
   "keywords": [],
   "author": "Oshi41",

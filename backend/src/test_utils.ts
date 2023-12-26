@@ -1,21 +1,27 @@
 import {PhoneNumberUtil, RegionCode} from "google-libphonenumber";
 import * as variables from "./static";
-import {Country, State} from "country-state-city";
+import {City, Country, State} from "country-state-city";
 import {RecordType} from "./static";
 import {default as fetch, Response} from "node-fetch";
 
-export const generate = (country: RegionCode = 'US'): Partial<variables.RecordType> => {
+export const generate = (country: RegionCode | undefined = undefined): Omit<variables.RecordType, 'created' | 'updated'> => {
     let util = PhoneNumberUtil.getInstance();
+    if (!country) {
+        const all = util.getSupportedRegions();
+        country = all[Math.floor(Math.random() * all.length)];
+    }
+
     if (!util.getSupportedRegions().includes(country))
         throw new Error('Unsupported: ' + country);
 
-    const country_desc = Country.getCountryByCode(country)
-    if (!country_desc)
-        throw new Error('Unsupported: ' + country);
+    const icountry = Country.getCountryByCode(country);
+    if (!country)
+        throw new Error('Unsupported: '+country);
 
-    const state = State.getStatesOfCountry(country)?.[0];
-    if (!state)
-        throw new Error('Unsupported: ' + country);
+    const states = State.getStatesOfCountry(icountry?.isoCode);
+    const istate = states[Math.floor(Math.random() * states.length)];
+    const cities = City.getCitiesOfState(icountry?.isoCode || '', istate?.isoCode);
+    const icity = cities[Math.floor(Math.random() * cities.length)];
 
     const phone = util.getExampleNumber(country).getNationalNumberOrDefault().toString().slice(0, -1)
         + Math.floor(Math.random() * 10);
@@ -34,8 +40,9 @@ export const generate = (country: RegionCode = 'US'): Partial<variables.RecordTy
     return {
         name,
         email: name + '@mail.com',
-        country: country_desc.name,
-        state: state.name,
+        country: icountry?.isoCode || '',
+        state: istate?.isoCode,
+        city: icity?.name,
         phone: '+' + phone,
     };
 };
@@ -54,8 +61,10 @@ export const post_data = async (data: Partial<RecordType>, port: number | string
     let json_body = undefined;
     if (resp.ok) {
         json_body = await resp.json();
-        json_body.created = new Date(json_body.created);
-        json_body.updated = new Date(json_body.updated);
+        if (json_body.created)
+            json_body.created = new Date(json_body.created);
+        if (json_body.updated)
+            json_body.updated = new Date(json_body.updated);
     }
     return Object.assign(resp, {json_body});
 };

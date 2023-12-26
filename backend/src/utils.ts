@@ -32,20 +32,33 @@ export function use_http_fn(fn: fn_type): RequestHandler {
                 return next?.();
         } catch (e: any & Error) {
             console.debug('Error during request:', req.url, e);
-            return Number.isInteger(e.code) ? res.status(e.code).send(e.message)
-                : res.status(500).send('Internal error');
+            const {code, result, message} = e;
+            if (result)
+                return res.status(code || 500).json(result);
+            else if (Number.isInteger(code))
+                return res.status(code).send(message);
+            else
+                return res.sendStatus(500);
         }
     };
 }
 
-export function mk_err(message: string, code: number = 400): Error & { code: number } {
-    return Object.assign(new Error(message), {code});
+export function mk_err(message: string | any, code: number = 400): Error & Partial<{
+    code: number,
+    result: any
+}> {
+    let error = new Error(typeof message == 'string' ? message : 'Error');
+    let other: Partial<{ code: number, result: any }> = {code};
+    if (typeof message != 'string')
+        other.result = message;
+    return Object.assign(error, other);
 }
 
 
 interface LoDash extends LoDashStatic {
     pick: (obj: any, fields: string[]) => any,
 }
+
 export function import_lo_dash(): LoDash {
     return _ as LoDash;
 }

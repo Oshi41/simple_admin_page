@@ -30,7 +30,7 @@ router.post('/', use_http_fn(async (req, res) => {
 }));
 router.patch('/', use_http_fn(async (req, res) => {
     const id = _.pick(req.body?.prev || {}, ['email', 'phone']);
-    const patch = _.pick(req.body?.patch || {}, ['name', 'phone', 'email', 'country', 'state']);
+    const patch = _.pick(req.body?.patch || {}, ['name', 'phone', 'email', 'country', 'state', 'city']);
     const count = await db.countAsync(id);
     if (count == 0)
         throw mk_err('There is no record to modify');
@@ -38,7 +38,7 @@ router.patch('/', use_http_fn(async (req, res) => {
         throw mk_err('Trying to edit too many records');
 
     const doc = await db.findOneAsync(id);
-    let result = {...doc, ...patch};
+    let result = {..._.omit(doc, ['_id']), ...patch};
     try {
         result = await schema.validateAsync(result);
     } catch (e: Error & any) {

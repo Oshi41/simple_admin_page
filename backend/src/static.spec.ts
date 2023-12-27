@@ -1,8 +1,9 @@
 import {RecordType, schema} from "./static";
-import {deepStrictEqual as eq} from 'assert';
+import {deepStrictEqual as eq, fail} from 'assert';
 import {import_lo_dash} from "./utils";
 import {PhoneNumberType, PhoneNumberUtil} from 'google-libphonenumber';
 import {generate} from "./test_utils";
+import {client_create_validate, client_edit_validate, CreateRecord} from "./schema";
 
 const _ = import_lo_dash();
 const p_util = PhoneNumberUtil.getInstance();
@@ -124,5 +125,61 @@ describe('schema', () => {
         const parsed = p_util.parse('+16102347566', 'RU')
 
         eq(p_util.isValidNumberForRegion(parsed, 'US'), true);
+    });
+});
+describe('client_edit_validation', () => {
+    it('works', () => {
+        const record = generate('US');
+        try {
+            client_edit_validate(record, false);
+            client_edit_validate(record, true);
+        } catch (e: any & Error) {
+            fail(`Must not fail here: ${e.message}`);
+        }
+    });
+    it('wrong fields', () => {
+        const valid_r = generate('US');
+        const map = new Map([
+            ['name', {...valid_r, name: 'Name1'}],
+            ['email', {...valid_r, email: 'me@mail@com', email2: 'me@mail@com'}],
+            ['country', {...valid_r, country: 'US1'}],
+            ['state', {...valid_r, state: 'Moscow'}],
+            ['city', {...valid_r, city: 'Moscow'}],
+            ['phone', {...valid_r, phone: '+8'}],
+        ]);
+        for (let [prop, r] of map) {
+            let e: any;
+            try {
+                client_edit_validate(r);
+                console.error('Should fail here!');
+            } catch (err) {
+                e = err;
+            }
+            eq(e?.result?.path, prop);
+        }
+    });
+});
+describe('client_create_validatopm', ()=>{
+    it('wrong fields: name, email, country, state, city, phone', async () => {
+        const valid_r: CreateRecord = generate('US');
+        valid_r.email2 = valid_r.email;
+        const map = new Map([
+            ['name', {...valid_r, name: 'Name1'}],
+            ['email', {...valid_r, email: 'me@mail@com', email2: 'me@mail@com'}],
+            ['country', {...valid_r, country: 'US1'}],
+            ['state', {...valid_r, state: 'Moscow'}],
+            ['city', {...valid_r, city: 'Moscow'}],
+            ['phone', {...valid_r, phone: '+8'}],
+        ]);
+        for (let [prop, r] of map) {
+            let e: any;
+            try {
+                client_create_validate(r);
+                console.error('Should fail here!');
+            } catch (err) {
+                e = err;
+            }
+            eq(e?.result?.path, prop);
+        }
     });
 });

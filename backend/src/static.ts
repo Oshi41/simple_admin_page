@@ -1,4 +1,4 @@
-import {schema as joi_schema} from './schema';
+import {schema as joi_schema, RecordType as _recordType} from './schema';
 import express, {Express} from "express";
 import {default as nedb} from "@seald-io/nedb";
 import path from "path";
@@ -13,14 +13,4 @@ export const db = new nedb({
     }
 });
 export const schema = joi_schema;
-
-export type RecordType = {
-    name: string,
-    phone: string,
-    email: string,
-    country: string,
-    state: string,
-    city: string,
-    created: Date,
-    updated: Date,
-}
+export type RecordType = _recordType;

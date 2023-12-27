@@ -9,8 +9,8 @@ import {ParsedQs} from "qs";
 import _, {LoDashStatic} from 'lodash';
 
 
-type handler_res = undefined | { result?: any, code?: number };
-type fn_type<
+type handler_res = void | undefined | { result?: any, code?: number };
+export type fn_type<
     P = ParamsDictionary,
     ResBody = any,
     ReqBody = any,
@@ -18,7 +18,7 @@ type fn_type<
     LocalsObj extends Record<string, any> = Record<string, any>,
 > = (req: Request<P, ResBody, ReqBody, ReqQuery, LocalsObj>,
      res: Response<ResBody, LocalsObj>,
-     next: NextFunction) => undefined | handler_res | Promise<undefined | handler_res>;
+     next: NextFunction) => undefined | handler_res | Promise<handler_res>;
 
 export function use_http_fn(fn: fn_type): RequestHandler {
     return async (req, res, next) => {

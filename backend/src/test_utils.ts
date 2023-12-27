@@ -3,6 +3,9 @@ import * as variables from "./static";
 import {City, Country, State} from "country-state-city";
 import {RecordType} from "./static";
 import {default as fetch, Response} from "node-fetch";
+import {import_lo_dash} from "./utils";
+
+const _ = import_lo_dash();
 
 export const generate = (country: RegionCode | undefined = undefined): Omit<variables.RecordType, 'created' | 'updated'> => {
     let util = PhoneNumberUtil.getInstance();
@@ -16,7 +19,7 @@ export const generate = (country: RegionCode | undefined = undefined): Omit<vari
 
     const icountry = Country.getCountryByCode(country);
     if (!country)
-        throw new Error('Unsupported: '+country);
+        throw new Error('Unsupported: ' + country);
 
     const states = State.getStatesOfCountry(icountry?.isoCode);
     const istate = states[Math.floor(Math.random() * states.length)];
@@ -37,14 +40,14 @@ export const generate = (country: RegionCode | undefined = undefined): Omit<vari
         .replace(/8/g, 'i')
         .replace(/9/g, 'j');
 
-    return {
+    return _.pickBy({
         name,
         email: name + '@mail.com',
         country: icountry?.isoCode || '',
         state: istate?.isoCode,
         city: icity?.name,
         phone: '+' + phone,
-    };
+    }, (value, key) => !!value) as Omit<variables.RecordType, 'created' | 'updated'>;
 };
 
 export const post_data = async (data: Partial<RecordType>, port: number | string): Promise<Response & {
@@ -69,15 +72,17 @@ export const post_data = async (data: Partial<RecordType>, port: number | string
     return Object.assign(resp, {json_body});
 };
 
-export const patch_data = async (from: Partial<RecordType>, data: Partial<RecordType>, port: number | string): Promise<Response & {
+type PatchData = {
+    $id: Pick<RecordType, 'email' | 'phone'> & { _id: string },
+    $set?: Partial<RecordType>,
+    unset?: Pick<RecordType, 'state' | 'city'>,
+};
+export const patch_data = async (data: PatchData, port: number | string): Promise<Response & {
     json_body: any
 }> => {
     const resp = await fetch(`http://localhost:${port}/record`, {
         method: 'PATCH',
-        body: JSON.stringify({
-            prev: from,
-            patch: data,
-        }),
+        body: JSON.stringify(data),
         headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'

@@ -1,10 +1,21 @@
 import joi from "joi";
 import {PhoneNumberUtil} from "google-libphonenumber";
 import {Country, ICountry, State, City} from "country-state-city";
-import {RecordType} from "./static";
+import {mk_err} from "./utils";
 
 const countries: Map<string, ICountry> = new Map(Country.getAllCountries().map(x => [x.isoCode, x]));
 const states = new Map(Array.from(countries.values()).map(x => [x, new Map(State.getStatesOfCountry(x.isoCode).map(x => [x.isoCode, x]))]));
+
+export type RecordType = {
+    name: string,
+    phone: string,
+    email: string,
+    country: string,
+    state: string,
+    city: string,
+    created: Date,
+    updated: Date,
+}
 
 export const schema = joi.object({
     name: joi.string().regex(/^[a-zA-Z ]*$/).min(1).max(100).required(),
@@ -55,7 +66,7 @@ export const schema = joi.object({
         if (!cities.length && !value)
             return value;
 
-        if (cities.find(x=>x.name == value))
+        if (cities.find(x => x.name == value))
             return value;
 
         throw new Error(`No such city in Country: ${country}, state: ${state}`);
@@ -63,3 +74,42 @@ export const schema = joi.object({
     created: joi.date().optional(),
     updated: joi.date().optional(),
 });
+
+export type CreateRecord = Partial<RecordType & { email2: string }>;
+
+/**
+ * Validate create object. Returns true if ok, throws error in other cases
+ * @param obj - record to validate
+ * @param strict - checks all fields in strict mode (before apply check)
+ * @throws Error - if check goes wrong
+ */
+export function client_create_validate(obj: CreateRecord, strict: boolean = false) {
+    if (obj.email2 && obj.email && obj.email2 !== obj.email)
+        throw mk_err({path: 'email2', message: `Emails do not match`}, 400,);
+
+    if (strict && !obj.email2)
+        throw mk_err({path: 'email2', message: `You should confirm email`}, 400,);
+
+    // remove field for creating only
+    delete obj.email2;
+    return client_edit_validate(obj, strict);
+}
+
+
+/**
+ * Validates edit object. Return true otherwise throws an error
+ * @param obj - edit object info
+ * @param strict - checks all fields in strict mode (before apply check)
+ * @throws Error - if check goes wrong
+ */
+export function client_edit_validate(obj: Partial<RecordType>, strict: boolean = false){
+    const validate_res = schema.validate(obj, {
+        presence: strict ? 'required' : 'optional',
+    });
+    if (validate_res.error) {
+        let {message, path, type} = validate_res.error.details[0];
+        throw mk_err({path: path.shift(), type, message}, 400);
+    }
+
+    return true;
+}

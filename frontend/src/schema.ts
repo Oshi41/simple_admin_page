@@ -1,7 +1,6 @@
 import joi from "joi";
 import {PhoneNumberUtil} from "google-libphonenumber";
-import {Country, ICountry, State, City} from "country-state-city";
-import {mk_err} from "./utils";
+import {Country, ICountry, State, City, ICity} from "country-state-city";
 
 const countries: Map<string, ICountry> = new Map(Country.getAllCountries().map(x => [x.isoCode, x]));
 const states = new Map(Array.from(countries.values()).map(x => [x, new Map(State.getStatesOfCountry(x.isoCode).map(x => [x.isoCode, x]))]));
@@ -38,7 +37,7 @@ export const schema = joi.object({
             return value;
         }
     }).required(),
-    email: joi.string().email().min(4).max(150).required(),
+    email: joi.string().email({tlds: {allow: false}}).min(4).max(150).required(),
     country: joi.string().custom(value => {
         if (!countries.has(value))
             throw new Error('no such country: ' + value);
@@ -77,6 +76,51 @@ export const schema = joi.object({
 
 export type CreateRecord = Partial<RecordType & { email2: string }>;
 
+// Have to repeat this function as it used as common code between backend/frontend
+function mk_err(message: string | any, code: number = 400): Error & Partial<{
+    code: number,
+    result: any
+}> {
+    let error = new Error(typeof message == 'string' ? message : 'Error');
+    let other: Partial<{ code: number, result: any }> = {code};
+    if (typeof message != 'string')
+        other.result = message;
+    return Object.assign(error, other);
+}
+
+function validate_location(r: Partial<Pick<RecordType, 'country' | 'state' | 'city'>>) {
+    if (!r.country)
+        throw mk_err({path: 'country', message: `You must select your country`}, 400,);
+
+    const country = Country.getCountryByCode(r.country);
+    if (!country)
+        throw mk_err({path: 'country', message: `Unknown country: ${r.country}`}, 400,);
+
+    const country_states = State.getStatesOfCountry(country.isoCode);
+    if (country_states.length) {
+        if (!r.state)
+            throw mk_err({path: 'state', message: `You must select your state`}, 400,);
+
+        if (!country_states.find(x => x.isoCode == r.state))
+            throw mk_err({path: 'state', message: `Unknown state: [ISO] ${r.state}`}, 400,);
+    }
+    const cities = City.getCitiesOfCountry(country.isoCode);
+    if (cities?.length) {
+        if (!country_states.length && !r.city)
+            throw mk_err({path: 'city', message: `You can skip state but must select your city`}, 400,);
+
+        let possible_cities: ICity[] = cities;
+        if (r.state)
+            possible_cities = possible_cities.filter(x => x.stateCode == r.state);
+
+        // can select at least one city
+        if (possible_cities.length) {
+            if (!possible_cities.find(x => x.name == r.city))
+                throw mk_err({path: 'city', message: `You must select your city`}, 400,);
+        }
+    }
+}
+
 /**
  * Validate create object. Returns true if ok, throws error in other cases
  * @param obj - record to validate
@@ -102,7 +146,7 @@ export function client_create_validate(obj: CreateRecord, strict: boolean = fals
  * @param strict - checks all fields in strict mode (before apply check)
  * @throws Error - if check goes wrong
  */
-export function client_edit_validate(obj: Partial<RecordType>, strict: boolean = false){
+export function client_edit_validate(obj: Partial<RecordType>, strict: boolean = false) {
     const validate_res = schema.validate(obj, {
         presence: strict ? 'required' : 'optional',
     });
@@ -110,6 +154,7 @@ export function client_edit_validate(obj: Partial<RecordType>, strict: boolean =
         let {message, path, type} = validate_res.error.details[0];
         throw mk_err({path: path.shift(), type, message}, 400);
     }
-
+    if (strict)
+        validate_location(obj);
     return true;
 }

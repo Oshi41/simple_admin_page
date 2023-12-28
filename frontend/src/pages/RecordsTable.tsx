@@ -1,29 +1,19 @@
 import * as React from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import MUIDataTable, {
-    DisplayData,
     MUIDataTableColumn,
-    MUIDataTableColumnDef, MUIDataTableColumnOptions,
-    MUIDataTableMeta, MUIDataTableProps,
-    MUIDataTableState, MUISortOptions
+    MUIDataTableColumnDef,
+    MUIDataTableColumnOptions,
+    MUIDataTableMeta,
+    MUIDataTableState,
+    MUISortOptions
 } from "mui-datatables";
-import {Country, State, City, ICountry, IState, ICity} from 'country-state-city';
-import {
-    Checkbox,
-    FormControl, FormHelperText, FormLabel,
-    IconButton,
-    InputLabel,
-    ListItemText,
-    MenuItem,
-    Select,
-    Stack,
-    Tooltip
-} from "@mui/material";
-import {Simulate} from "react-dom/test-utils";
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import {getQParam, setQParam} from "../hooks";
-import {tab} from "@testing-library/user-event/dist/tab";
+import {City, Country, State,} from 'country-state-city';
+import {Checkbox, FormControl, FormLabel, IconButton, InputLabel, MenuItem, Select, Stack} from "@mui/material";
+import {Delete, Edit} from '@mui/icons-material';
+import {getQParam, setQParam, useLocation} from "../hooks";
+import {RecordType} from "../schema";
+import {PhoneNumberFormat, PhoneNumberUtil} from 'google-libphonenumber'
 
 /**
  * Predefine filter from URL
@@ -55,8 +45,9 @@ function get_sort_from_url(): MUISortOptions {
 /**
  * Saving filter data to
  * @param tableState
+ * @param data
  */
-function set_to_url(tableState: MUIDataTableState) {
+function set_to_url(tableState: MUIDataTableState, data: any[]) {
     for (let i = 0; i < tableState.filterList.length; i++) {
         const col_index = tableState.columnOrder[i];
         const column_def = tableState.columns[col_index];
@@ -70,6 +61,21 @@ function set_to_url(tableState: MUIDataTableState) {
         setQParam(q_sort_name, tableState.sortOrder.name + '+' + tableState.sortOrder.direction);
     else
         setQParam(q_sort_name, '');
+
+    const selected = tableState.selectedRows.data.map(x => (x as any)?.index)
+        .filter(x => Number.isInteger(x)).map(x=>data[x]?.email).filter(Boolean);
+    setQParam('sel', selected.join(','));
+}
+
+function get_selection_from_url(data: any[]): number[] {
+    const emails = (getQParam('sel') || '').split(' ');
+    const result: number[] = [];
+    for (let email of emails) {
+        const index = data.findIndex(x => x.email == email);
+        if (index >= 0)
+            result.push(index);
+    }
+    return result;
 }
 
 function date_render(value: any, tableMeta: MUIDataTableMeta, updateValue: (value: string) => void): string | React.ReactNode {
@@ -84,99 +90,74 @@ function date_render(value: any, tableMeta: MUIDataTableMeta, updateValue: (valu
     });
 }
 
-// type dependant_filters = { country: string[], state: string[], city: string[] };
+type RecordsPageProps = {
+    set_edit: (obj: RecordType | undefined | Partial<RecordType>) => void,
+};
 
-// function get_available_filters_fn(tableState: MUIDataTableState) {
-//     return function (): dependant_filters {
-//         const result: dependant_filters = {
-//             country: [],
-//             state: [],
-//             city: [],
-//         };
-//
-//         let fields = 'country state city'.split(' ');
-//
-//         // @ts-ignore
-//         let [countries, states, cities]: [ICountry[], IState[], ICity[]] = fields
-//             .map(x => tableState.data.map(d => d[x]).filter(Boolean));
-//
-//         const [selected_country_names, selected_state_names, selected_city_names] = fields.map(x => tableState
-//             .filterList[tableState.columnOrder[tableState.columns.findIndex(c => c.name == x)]]);
-//
-//         if (selected_country_names.length)
-//             countries = countries.filter(x=>selected_country_names.includes(x.name));
-//         if (selected_state_names.length)
-//             states = states.filter(x=>selected_state_names.includes(x.name));
-//         if (selected_city_names.length)
-//             cities = cities.filter(x=>selected_city_names.includes(x.name));
-//
-//         return result;
-//     };
-// }
+function generate_random_data(): RecordType[] {
+    const rand_name = () => {
+        const name = Math.floor(Math.random() * 1_000_000).toString()
+            .replace(/0/g, 'a')
+            .replace(/1/g, 'b')
+            .replace(/2/g, 'c')
+            .replace(/3/g, 'd')
+            .replace(/4/g, 'e')
+            .replace(/5/g, 'f')
+            .replace(/6/g, 'j')
+            .replace(/7/g, 'h')
+            .replace(/8/g, 'i')
+            .replace(/9/g, 'j');
+        return name;
+    }
+    const r_date = () => new Date(new Date().valueOf() - Math.random() * Math.pow(10, 12));
 
-export const RecordsPage = () => {
+    function rand_elem<T>(arr: T[]): T {
+        let index = Math.floor(Math.random() * arr.length);
+        return arr[index];
+    }
+
+    const result: RecordType[] = [];
+    for (let i = 0; i < 25; i++) {
+        const name = rand_name();
+        const email = name + '@mail.copm';
+        const util = PhoneNumberUtil.getInstance();
+        const region = rand_elem(util.getSupportedRegions());
+        const icountry = Country.getCountryByCode(region);
+        const istate = rand_elem(State.getStatesOfCountry(icountry?.isoCode));
+        const icity = rand_elem(City.getCitiesOfState(icountry?.isoCode || '', istate?.isoCode));
+
+        let phone = util.getExampleNumber('US').getNationalNumberOrDefault().toString();
+        phone = phone.substring(0, phone.length - 4) + Math.floor(Math.random() * 1000).toString().padStart(4, '0')
+        result.push({
+            name,
+            email,
+            phone,
+            country: icountry?.isoCode || '',
+            state: istate?.isoCode,
+            city: icity?.name,
+            created: r_date(),
+            updated: r_date(),
+        });
+    }
+    return result;
+}
+
+export const RecordsPage = (props: RecordsPageProps) => {
     const [data, setData] = useState<any[]>([]);
     const tableStateRef = useRef<MUIDataTableState>();
+    const [selection, setSelection] = useState(get_selection_from_url(data));
+
+    const [url, set_url] = useLocation();
 
     function on_table_state_changed(action: string, tableState: MUIDataTableState): void {
         tableStateRef.current = tableState;
-        set_to_url(tableState);
+        set_to_url(tableState, data);
     }
 
     const columns: MUIDataTableColumnDef[] = useMemo(() => {
 
         function dropdown_logic(location: string, filters: any[], row?: any[]): boolean {
             return !!filters.length && !filters.includes(location);
-        }
-
-        function get_dependant_filters(): { country: string[], state: string[], city: string[] } {
-            const result: { country: string[], state: string[], city: string[] } = {
-                country: [],
-                state: [],
-                city: [],
-            };
-            const state = tableStateRef.current;
-            if (!!state) {
-                const [country_index, state_index, city_index] = 'country state city'.split(' ')
-                    .map(x => state.columnOrder[state.columns.findIndex(c => c.name == x)]);
-
-                if (country_index >= 0)
-                    result.country = state.filterData[country_index];
-                if (state_index >= 0)
-                    result.state = state.filterData[state_index];
-                if (city_index >= 0)
-                    result.city = state.filterData[city_index];
-
-                if (result.country?.length) {
-                    const available_states = new Set(result.country.flatMap(x => State.getStatesOfCountry(x))
-                        .map(x => x.isoCode));
-                    result.state = result.state?.filter(x => available_states.has(x));
-
-                    const available_cities = new Set(result.country.flatMap(x => City.getCitiesOfCountry(x))
-                        .map(x => x?.name).filter(Boolean));
-                    result.city = result.city?.filter(x => available_cities.has(x));
-                }
-
-                if (result.state?.length) {
-                    // @ts-ignore
-                    const states: IState[] = result.state.map(x => State.getStateByCode(x)).filter(Boolean);
-                    const possible_countries = new Set(states.map(x => x?.isoCode));
-                    const possible_cities = new Set(states.flatMap(x => City.getCitiesOfState(x.countryCode, x.isoCode)
-                        ?.flatMap(c => c.name)));
-
-                    result.country = result.country.filter(x => possible_countries.has(x));
-                    result.city = result.city.filter(x => possible_cities.has(x));
-                }
-
-                if (result.city.length) {
-                    // @ts-ignore
-                    const possible_cities: ICity[] = data.flatMap(({country, state, city}) => {
-                        const all_cities = City.getCitiesOfState(country, state);
-                        return all_cities.find(x => x.name == city);
-                    });
-                }
-            }
-            return result;
         }
 
         function create_dd_filter(filter_data?: () => string[], deps?: string[]) {
@@ -252,80 +233,98 @@ export const RecordsPage = () => {
             };
         }
 
-        const result: MUIDataTableColumn[] = 'name phone email'.split(' ')
-            .map(x => {
-                return default_column(x, {
-                    filterType: 'custom',
-                    filterOptions: {
-                        logic: dropdown_logic,
-                        display: create_dd_filter(),
-                    },
-                });
-            });
-        const dependant_filters = 'country state city'.split(' ');
-
-        for (let name of dependant_filters) {
-            result.push(default_column(name, {
-                filterType: 'custom',
-                customBodyRender: value => value?.name,
-                filterOptions: {
-                    logic: dropdown_logic,
-                    display: create_dd_filter(),
-                },
-            }));
-        }
+        const result: MUIDataTableColumn[] = [];
+        result.push(default_column('name', {
+            filterType: 'custom',
+            filterOptions: {
+                logic: dropdown_logic,
+                display: create_dd_filter(),
+            },
+        }));
+        result.push(default_column('email', {
+            filterType: 'custom',
+            filterOptions: {
+                logic: dropdown_logic,
+                display: create_dd_filter(),
+            },
+            customBodyRender: (email, tableMeta, updateValue) => {
+                const {phone, country} = data.find(x => x.email == email);
+                let numberUtil = PhoneNumberUtil.getInstance();
+                try {
+                    const phone_number = numberUtil.parse(phone, country);
+                    return numberUtil.format(phone_number, PhoneNumberFormat.INTERNATIONAL);
+                } catch (e) {
+                    return phone;
+                }
+            },
+        }, 'Phone'));
+        result.push(default_column('email', {
+            filterType: 'custom',
+            filterOptions: {
+                logic: dropdown_logic,
+                display: create_dd_filter(),
+            },
+            customBodyRender: (email) => {
+                const {country} = data.find(x => x.email == email);
+                return Country.getCountryByCode(country)?.name || country;
+            },
+        }, 'Country'));
+        result.push(default_column('email', {
+            filterType: 'custom',
+            filterOptions: {
+                logic: dropdown_logic,
+                display: create_dd_filter(),
+            },
+            customBodyRender: (email) => {
+                const {country, state} = data.find(x => x.email == email);
+                return State.getStateByCodeAndCountry(state, country)?.name || state;
+            },
+        }, 'State'));
+        result.push(default_column('city', {
+            filterType: 'custom',
+            filterOptions: {
+                logic: dropdown_logic,
+                display: create_dd_filter(),
+            },
+        }));
         for (let [name, label] of [['created', 'Created date'], ['updated', 'Updated date']]) {
             result.push(default_column(name, {customBodyRender: date_render}, label));
         }
+        result.push({
+            name: 'email',
+            label: 'Actions',
+            options: {
+                searchable: false,
+                sort: false,
+                filter: false,
+                draggable: false,
+                customBodyRender: (email) => {
+                    return <Stack direction='row' spacing='8px'>
+                        <IconButton onClick={() => {
+                            const item = data.find(x => x.email == email);
+                            props.set_edit({...item});
+                            set_url(prevState => {
+                                prevState.pathname = '/edit';
+                                return prevState;
+                            });
+                            const selection = new Set([...getQParam('sel')?.split(' ') || [], email]);
+                            setQParam('sel', Array.from(selection).join(','));
+                        }}><Edit/></IconButton>
+                        <IconButton><Delete/></IconButton>
+                    </Stack>
+                },
+            },
+        })
         set_filter_from_url(result);
         return result;
-    }, [data, tableStateRef.current]);
+    }, [data, tableStateRef.current, props?.set_edit]);
 
     // debug loading items
     useEffect(() => {
-        const result = [];
-        const rand_name = () => {
-            const name = Math.floor(Math.random() * 1_000_000).toString()
-                .replace(/0/g, 'a')
-                .replace(/1/g, 'b')
-                .replace(/2/g, 'c')
-                .replace(/3/g, 'd')
-                .replace(/4/g, 'e')
-                .replace(/5/g, 'f')
-                .replace(/6/g, 'j')
-                .replace(/7/g, 'h')
-                .replace(/8/g, 'i')
-                .replace(/9/g, 'j');
-            return name;
-        }
-        const r_date = () => new Date(new Date().valueOf() - Math.random() * Math.pow(10, 12));
-
-        function rand_elem<T>(arr: T[]): T {
-            let index = new Date().valueOf() % arr.length;
-            index = Math.max(0, index);
-            index = Math.min(arr.length, index);
-            // @ts-ignore
-            return arr[index] || {name: 'DEFAULT'};
-        }
-
-        for (let i = 0; i < 25; i++) {
-            const country = Country.getCountryByCode('US');
-            const state = rand_elem(State.getStatesOfCountry(country?.isoCode));
-            const city = rand_elem(City.getCitiesOfState(country?.isoCode || '', state.isoCode));
-            const item = {
-                name: rand_name(),
-                email: rand_name() + '@mail.com',
-                phone: '+' + Math.floor(Math.random() * 1_00_000_000_000),
-                country: country,
-                state: state,
-                city: city,
-                created: r_date(),
-                updated: r_date(),
-            };
-            result.push(item);
-        }
+        const result = generate_random_data();
         setData(result);
     }, []);
+
 
     return <MUIDataTable columns={columns}
                          data={data}
@@ -335,6 +334,8 @@ export const RecordsPage = () => {
                              download: false,
                              onTableChange: on_table_state_changed,
                              sortOrder: get_sort_from_url(),
+                             rowsSelected: selection,
+                             customToolbarSelect: () => <></>,
                          }}
     />
 };

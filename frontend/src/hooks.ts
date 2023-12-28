@@ -2,16 +2,19 @@ import {Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState} fro
 
 /** Hook to listen URL changes*/
 export const useLocation = (): [URL, Dispatch<SetStateAction<URL>>] => {
-    const href = window.location.toString();
+    const href = window.location.href;
     const url = useMemo<URL>(() => new URL(href), [href]);
     const set_url: Dispatch<SetStateAction<URL>> = useCallback(prevState => {
-        let updated = new URL(typeof prevState == 'function' ? prevState(url)
-            : prevState);
+        const old = new URL(window.location.href);
+        const updated = typeof prevState == 'function'
+            ? prevState(new URL(old.toString())) : prevState;
         if (updated.toString() == url.toString())
             return;
-
         window.history.pushState({url: updated.toString()}, '', updated);
-    }, [url]);
+    }, []);
+    useEffect(() => {
+        console.log('Upd', href);
+    }, [href]);
     return [url, set_url];
 };
 
@@ -43,13 +46,15 @@ export const getQParam = (name: string): string | null => {
     let url = new URL(window.location.toString());
     return url.searchParams.get(name);
 };
-export const setQParam = (name: string, val?: string)=>{
-    let url = new URL(window.location.toString());
+export const setQParam = (name: string, val?: string) => {
+    let url = new URL(window.location.href);
     if (val)
         url.searchParams.set(name, val);
     else
         url.searchParams.delete(name);
 
-    if (url.toString() != window.location.toString())
-        window.history.pushState({url: url.toString()}, '', url);
+    if (url.toString() == window.location.href)
+        return;
+
+    window.history.pushState({url: url.toString()}, '', url);
 }

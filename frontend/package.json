@@ -24,7 +24,10 @@
     "google-libphonenumber": "^3.2.33",
     "@types/google-libphonenumber": "^7.4.30",
     "react-input-mask": "^2.0.4",
-    "@types/react-input-mask": "^3.0.5"
+    "@types/react-input-mask": "^3.0.5",
+    "joi": "^17.11.0",
+    "@types/joi": "^17.2.3",
+    "@mui/icons-material": "^5.15.2"
   },
   "scripts": {
     "prerestart": "node scripts/install.js",

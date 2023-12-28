@@ -90,8 +90,7 @@ describe('[POST] /record', () => {
 describe('[PATCH] /record', () => {
     let $id: Partial<RecordType>;
     beforeEach(async () => {
-        $id = generate('US');
-        await db.insertAsync($id);
+        $id = await db.insertAsync(generate('US'));
     });
 
     it('works', async () => {
@@ -101,129 +100,94 @@ describe('[PATCH] /record', () => {
         eq(res.status, 200);
         eq($set, _.pick(res.json_body, Object.keys($set)));
     });
+    it('works with remove state and city', async ()=>{
+        const $set = generate('AX');
+        const $unset = {state: 1, city: 1};
+        // @ts-ignore
+        const res = await patch_data({$id, $set, $unset}, base_url.port);
+        eq(res.status, 200);
+        eq($set, _.pick(res.json_body, Object.keys($set)));
+    });
+    it('works with remove city', async ()=>{
+        const $set = generate('AL');
+        $set.state = '01'; // Berat County
+        const $unset = {city: 1};
+        // @ts-ignore
+        const res = await patch_data({$id, $set, $unset}, base_url.port);
+        eq(res.status, 200);
+        eq($set, _.pick(res.json_body, Object.keys($set)));
+    });
+    it('deny due to PK', async ()=>{
+        const other = generate('US');
+        const failed = [
+            ['email', {...other, email: $id.email}],
+            ['phone', {...other, phone: $id.phone}],
+            ['phone', {...other, phone: $id.phone, email: $id.email}],
+        ];
+
+        for (let [prop, patch] of failed) {
+            // @ts-ignore
+            const res = await patch_data({$id, $set: patch}, base_url.port);
+            eq(res.status, 400);
+            eq(res.json_body?.path, '$id.'+prop);
+        }
+    });
+    it('deny due to wrong location', async ()=>{
+        const other = generate('US');
+        const test_data = [
+            ['city', other, {state: 1}],         // implementations nuanses
+            ['phone', {...other, country: 'RU'}],   // implementations nuanses
+            ['city', other, {city: 1}],
+            ['city', {...other, city: 'Moscow'}],
+        ];
+
+        for (let [prop, $set, $unset] of test_data) {
+            // @ts-ignore
+            const res = await patch_data({$id, $set, $unset}, base_url.port);
+            eq(res.status, 400);
+            eq(res.json_body?.path, prop);
+        }
+    });
+    it('failed due to wrong fields', async ()=>{
+        const valid_r = generate('US');
+        const map = new Map([
+            ['name', {...valid_r, name: 'Name1'}],
+            ['email', {...valid_r, email: 'me@mail@com', email2: 'me@mail@com'}],
+            ['country', {...valid_r, country: 'US1'}],
+            ['state', {...valid_r, state: 'Moscow'}],
+            ['city', {...valid_r, city: 'Moscow'}],
+            ['phone', {...valid_r, phone: '+8'}],
+        ]);
+        for (let [prop, $set] of map) {
+            // @ts-ignore
+            const resp = await patch_data({$id, $set}, base_url.port);
+            eq(resp.status, 400);
+            eq(resp.json_body.path, prop);
+        }
+    });
 });
 
-// describe('[POST] /record', () => {
-//     it('works', async () => {
-//         const record = generate();
-//         const keys = Object.keys(record);
-//         const resp = await post_data(record, base_url.port);
-//         eq(resp.status, 200);
-//         const json_resp: variables.RecordType = resp.json_body;
-//         eq(_.pick(record, keys), _.pick(json_resp, keys));
-//         const all_data = await db.findAsync({});
-//         eq(all_data.length, 1);
-//         eq(all_data[0], json_resp);
-//     });
-//     it('failed due to repeating PK', async () => {
-//         const record = generate();
-//         const record2 = generate();
-//         let resp = await post_data(record, base_url.port);
-//         eq(resp.status, 200);
-//
-//         let copy: Partial<variables.RecordType> = {...record};
-//         resp = await post_data(copy, base_url.port);
-//         eq(resp.status, 400); // denied due to same obj
-//
-//         copy = {...record, email: record2.email};
-//         resp = await post_data(copy, base_url.port);
-//         eq(resp.status, 400); // denied due to same phone
-//
-//         copy = {...record, phone: record2.phone};
-//         resp = await post_data(copy, base_url.port);
-//         eq(resp.status, 400); // denied due to same phone
-//     });
-//     it('failed due to invalidate fields', async () => {
-//         const _post = async (data: Partial<RecordType>, msg: string, expected = 400) => {
-//             const resp = await post_data(data, base_url.port)
-//             eq(resp.status, expected, `Have ${resp.status} but expected ${expected}, ${msg}`);
-//         };
-//
-//         const record = generate('RU');
-//         await _post({...record, state: 'Florida'}, 'Florida is not RU state');
-//         await _post({...record, phone: record.phone?.replace(/\+/g, '')}, 'Phone without +');
-//         await _post({...record, phone: record.phone + 'b'}, 'Phone with letters');
-//         await _post({...record, name: 'Some name with 1'}, 'Name with numbers');
-//         await _post({...record, email: 'some@mail@com'}, 'Wrong email format');
-//     });
-// });
-// describe('[PATCH] /record', () => {
-//     it('works', async () => {
-//         const record = generate('US');
-//         await db.insertAsync(record);
-//         const $id = _.pick(record, ['email', 'phone']);
-//         const $set = generate('US');
-//         let resp = await patch_data({$id, $set}, base_url.port);
-//         eq(resp.status, 200);
-//         eq($set, _.pick(resp.json_body, Object.keys($set)));
-//     });
-//     // it('saved integrity (checking PK)', async () => {
-//     //     const record = generate();
-//     //     const other = generate();
-//     //
-//     //     let resp = await post_data(record, base_url.port);
-//     //     eq(resp.status, 200);
-//     //     resp = await post_data(other, base_url.port);
-//     //     eq(resp.status, 200);
-//     //
-//     //     resp = await patch_data(record, other, base_url.port);
-//     //     eq(resp.status, 400, 'Cannot patch as existing record');
-//     //
-//     //     resp = await patch_data(record, _.pick(other, ['email']), base_url.port);
-//     //     eq(resp.status, 400, 'Cannot change email to existing one');
-//     //
-//     //     resp = await patch_data(record, _.pick(other, ['phone']), base_url.port);
-//     //     eq(resp.status, 400, 'Cannot change phone to existing one');
-//     //
-//     //     resp = await patch_data(record, _.pick(other, ['phone', 'email']), base_url.port);
-//     //     eq(resp.status, 400, 'Cannot change phone and phone to existing one');
-//     // });
-//     // it('using validation', async () => {
-//     //     const record = generate();
-//     //     let resp = await post_data(record, base_url.port);
-//     //     eq(resp.status, 200);
-//     //
-//     //     resp = await patch_data(record, {country: 'Russia'}, base_url.port);
-//     //     eq(resp.status, 400, 'You should change state with country accordingly');
-//     //
-//     //     resp = await patch_data(record, {email: 'mail@mail@com'}, base_url.port);
-//     //     eq(resp.status, 400, 'Wrong email type');
-//     //
-//     //     resp = await patch_data(record, {phone: '+2'}, base_url.port);
-//     //     eq(resp.status, 400, 'Wrong phone');
-//     //
-//     //     resp = await patch_data(record, {name: 'Me1'}, base_url.port);
-//     //     eq(resp.status, 400, 'Name with numbers');
-//     // });
-// });
-// describe('[DELETE] /record', () => {
-//     it('works', async () => {
-//         const record = generate();
-//         await post_data(record, base_url.port);
-//         const resp = await fetch(base_url, {
-//             method: 'DELETE',
-//             body: JSON.stringify(record),
-//             headers: {
-//                 'Accept': 'application/json',
-//                 'Content-Type': 'application/json'
-//             }
-//         });
-//         eq(resp.status, 200);
-//         eq(db.getAllData().length, 0);
-//     });
-//     it('cannot remove twice', async ()=>{
-//         const record = generate();
-//         await post_data(record, base_url.port);
-//         let resp = await delete_data(record, base_url.port);
-//         eq(resp.status, 200);
-//         resp = await delete_data(record, base_url.port);
-//         eq(resp.status, 400);
-//     });
-//     it('cannot find item to remove', async ()=>{
-//         const record = generate();
-//         const other = generate();
-//         await post_data(record, base_url.port);
-//         let resp = await delete_data(other, base_url.port);
-//         eq(resp.status, 400);
-//     });
-// });
+describe('[DELETE] /record', ()=>{
+    let $id: Partial<RecordType>;
+    beforeEach(async () => {
+        $id = await db.insertAsync(generate('US'));
+    });
+
+    it('works', async ()=>{
+        const resp = await delete_data($id, base_url.port)
+        eq(resp.ok, true);
+        eq(resp.status, 200);
+        eq(await db.countAsync({}), 0);
+    });
+    it('cannot remove not existing object', async ()=>{
+        const other = generate('US');
+        const resp = await delete_data(other, base_url.port)
+        eq(resp.status, 400);
+        eq(await db.findAsync({}), [$id]);
+    });
+    it('cannot remove without PK', async ()=>{
+        const resp = await delete_data(_.omit($id, '_id phone email'.split(' ')), base_url.port)
+        eq(resp.status, 400);
+        eq(await db.findAsync({}), [$id])
+    });
+});

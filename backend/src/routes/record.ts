@@ -23,17 +23,13 @@ async function check_db_existence(r: Partial<RecordType>) {
     if (_.isEmpty(r))
         throw mk_err({path: '$id', message: `You should pass ID object to edit`}, 400);
 
-    const ids = new Set();
     for (let prop of pk) {
         const value = _.get(r, prop);
         if (value) {
-            const docs = await db.findAsync({[prop]: value}, {_id: 1});
-            docs.forEach(x => ids.add(x));
+            if (await db.countAsync({[prop]: value}) > 0)
+                throw mk_err({path: '$id.' + prop, message: `${prop}=${value} already exists`}, 400);
         }
     }
-
-    if (ids.size > 0)
-        throw mk_err({path: '$id', message: `ID pointing on multiple documents`}, 400);
 }
 
 async function validate_post_mw(req: CustomRequestType) {
@@ -65,7 +61,7 @@ async function validate_patch_mw(req: CustomRequestType) {
     req.$unset = unset;
 
     const updated: Partial<RecordType> = modify(_.omit(req.$id, ['_id']), {$set: set, $unset: unset});
-    client_edit_validate(updated);
+    client_edit_validate(updated, true);
 
     for (let prop of pk) {
         const l = _.pick(req.$id, [prop]);
@@ -116,112 +112,26 @@ router.patch('/',
         }
     }));
 
-//
-// /**
-//  * Validates creation object, checks DB insertion possibility
-//  */
-// const validate_creation_mw: fn_type = async (req, res, next) => {
-//     let json = req.body as Partial<RecordType>;
-//     client_create_validate(json, true);
-//
-//     for (let prop of pk) {
-//         if (await db.countAsync({[prop]: json[prop]}) > 0)
-//             throw mk_err({path: prop, message: json[prop] + ' already exists'}, 400);
-//     }
-//
-//     json.created = new Date();
-//     json.updated = new Date();
-// };
-// /**
-//  * Validates old object id and look it up in DB
-//  */
-// const validate_old_mw: MwFuncType = async (req) => {
-//     let json = req.body?.$id as Partial<RecordType>;
-//     let id = _.pick(json, pk);
-//     const doc: RecordType[] = await db.findAsync(id);
-//     if (doc.length != 1)
-//         throw mk_err({path: 'old', message: 'old must be id of single record'}, 400);
-//     req._source = doc[0];
-// };
-//
-// const validate_upd_mw: MwFuncType = async (req) => {
-//     const source = req._source;
-//     if (!source)
-//     {
-//         console.warn('Looks like validate_old_mw was not called');
-//         throw mk_err({path: 'old', message: 'You should pass editing object ID'}, 400);
-//     }
-//
-//     const $set: Partial<RecordType> = req.body?.$set;
-//     const $unset: Partial<RecordType> = req.body?.$unset;
-//     const patch = {$set, $unset};
-//
-//     const patched_version = modify(req.body.upd, patch);
-//
-//     // if (!req.body)
-//     //     throw mk_err({path: 'upd', message: 'You should pass changes you need to make'}, 400);
-//     //
-//     // const can_set: RecordKeyType[] = ['name', 'phone', 'email', 'country', 'state', 'city'];
-//     // const can_unset: RecordKeyType[] = ['state', 'city'];
-//     //
-//     // const $set: Partial<RecordType> = {}, $unset: Partial<RecordType> = {};
-//     // for (let prop of new Set([...can_set, ...can_unset]))
-//     // {
-//     //     let value = req.body?.upd?.[prop];
-//     //     if (!value && can_unset.includes(prop))
-//     //         $unset[prop] = value;
-//     //     if (!!value)
-//     //         $set[prop] = value;
-//     // }
-//     //
-//     // $set.created = new Date();
-//     // client_edit_validate($set);
-//     req._patch = {$set, $unset};
-// };
-//
-//
-// router.post('/', use_http_fn(validate_creation_mw), use_http_fn(async (req, res) => {
-//     let json = req.body as Partial<RecordType>;
-//     let result = await db.insertAsync(json);
-//     return {result};
-// }));
-// router.patch('/',
-//     use_http_fn(validate_old_mw),
-//     use_http_fn(validate_upd_mw),
-//     use_http_fn(async function edit_object(req: CustomRequestType) {
-//         const {_patch, _source} = req;
-//         if (!_source || !_patch)
-//             throw mk_err('Internal error', 500);
-//
-//         const id = _.pick(_source, ['_id']);
-//         const patch = _.omit(_patch, '_id');
-//         try {
-//             let {numAffected} = await db.updateAsync(id, _patch, {
-//                 multi: false,
-//                 upsert: false
-//             });
-//             if (numAffected != 1)
-//                 throw new Error('Internal error');
-//         } catch (e: any & Error) {
-//             throw mk_err(e.message, 500);
-//         }
-//         const result = await db.findOneAsync(id);
-//         return {result};
-//     }),
-// );
-// router.delete('/', use_http_fn(async (req, res) => {
-//     const id = _.pick(req.body, pk);
-//     const count = await db.countAsync(id);
-//     if (count == 0)
-//         throw mk_err('There is no record to modify');
-//     if (count > 1)
-//         throw mk_err('Trying to edit too many records');
-//
-//     const removed = await db.removeAsync(id, {multi: false});
-//     if (removed != 1)
-//         throw mk_err('Internal error', 500);
-//
-//     return {code: 200};
-// }));
+router.delete('/', use_http_fn(async (req) => {
+    const id = _.pick(req.body, pk);
+    if (_.isEmpty(id))
+        throw mk_err('No primary keys founded', 400);
+
+    const count = await db.countAsync(id);
+    if (count > 1)
+        throw mk_err('Cannot delete multiple records', 400);
+    if (count == 0)
+        throw mk_err('ID is not pointing to any record', 400);
+
+    try {
+        const rm = await db.removeAsync(id, {multi: false});
+        if (rm != 1)
+            throw new Error("Internal error");
+        return {code: 200};
+    } catch (e: any) {
+        console.error('Error during remove:', e);
+        throw mk_err(e.message || 'Internal error', 500);
+    }
+}));
 
 export default router;

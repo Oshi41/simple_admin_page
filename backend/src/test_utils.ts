@@ -88,19 +88,16 @@ export const patch_data = async (data: PatchData, port: number | string): Promis
             'Content-Type': 'application/json'
         },
     });
-    let json_body = undefined;
-    if (resp.ok) {
-        json_body = await resp.json();
+    let json_body = await resp.json();
+    if (json_body.created)
         json_body.created = new Date(json_body.created);
+    if (json_body.updated)
         json_body.updated = new Date(json_body.updated);
-    }
     return Object.assign(resp, {json_body});
 };
 
-export const delete_data = async (id: Partial<RecordType>, port: string | number): Promise<Response & {
-    json_body: any
-}> => {
-    const resp = await fetch(`http://localhost:${port}/record`, {
+export const delete_data = async (id: Partial<RecordType>, port: string | number): Promise<Response> => {
+    return await fetch(`http://localhost:${port}/record`, {
         method: 'DELETE',
         body: JSON.stringify(id),
         headers: {
@@ -108,6 +105,4 @@ export const delete_data = async (id: Partial<RecordType>, port: string | number
             'Content-Type': 'application/json'
         },
     });
-    let json_body = undefined;
-    return Object.assign(resp, {json_body});
 };

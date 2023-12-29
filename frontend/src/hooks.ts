@@ -11,7 +11,7 @@ export const useLocation = (): [URL, Dispatch<SetStateAction<URL>>] => {
         if (updated.toString() == url.toString())
             return;
         window.history.pushState({url: updated.toString()}, '', updated);
-    }, []);
+    }, [window.location.href, window.history]);
     useEffect(() => {
         console.log('Upd', href);
     }, [href]);

@@ -27,7 +27,9 @@
     "@types/react-input-mask": "^3.0.5",
     "joi": "^17.11.0",
     "@types/joi": "^17.2.3",
-    "@mui/icons-material": "^5.15.2"
+    "@mui/icons-material": "^5.15.2",
+    "lodash": "^4.17.21",
+    "@types/lodash": "^4.14.202"
   },
   "scripts": {
     "prerestart": "node scripts/install.js",

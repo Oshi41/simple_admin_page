@@ -34,7 +34,7 @@
   "scripts": {
     "prerestart": "node scripts/install.js",
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "cross-env BUILD_PATH=\"../backend/static\" react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

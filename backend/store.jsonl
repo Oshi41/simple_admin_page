@@ -1,2 +1,3 @@
+{"phone":"+373 22 222 222","name":"name","email":"name@mail.com","country":"MD","state":"CA","city":"Cahul","created":{"$$date":1704142154125},"updated":{"$$date":1704142161639},"_id":"xsGztEj2bmThY4ny"}
 {"$$indexCreated":{"fieldName":"email","unique":true,"sparse":false}}
 {"$$indexCreated":{"fieldName":"phone","unique":true,"sparse":false}}

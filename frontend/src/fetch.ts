@@ -147,8 +147,10 @@ async function edit_record_prod($id: Partial<RecordType>, edited: Partial<Record
     const unset_fields: t[] = ['state', 'city'];
     const $set = _.fromPairs(set_fields.map(x => [x, edited[x]])
         .filter(x => !!x[1]));
-    const $unset = _.fromPairs(unset_fields.map(x => [x, !edited[x] ? 1 : 0])
-        .filter(x => !x[1]));
+    const $unset = _.fromPairs(unset_fields
+        .map(x => [x, !edited[x] ? 1 : 0])
+        .filter(x => x[1])
+    );
 
     const resp = await fetch('/record', {
         method: 'PATCH',
@@ -212,7 +214,7 @@ async function delete_record_prod($id: Partial<RecordType>) {
     throw new Error(await resp.text());
 }
 
-const is_dev = true;
+const is_dev = false;
 
 export type TableData = RecordType & {
     _location: [ICountry | undefined, IState | undefined, ICity | undefined],
@@ -285,6 +287,6 @@ export const create_record = async (r: Partial<RecordType & { email2: string }>)
  * @param r - ID of deleting element (must include email/phone fields)
  */
 export const delete_record = async (r: Partial<RecordType>) => {
-    return await (is_dev ? delete_record_dev : delete_record_dev)(r);
+    return await (is_dev ? delete_record_dev : delete_record_prod)(r);
 };
 

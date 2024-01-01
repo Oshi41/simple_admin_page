@@ -24,7 +24,7 @@ type EditErrorsType = Partial<Omit<RecordType, 'created' | 'updated'> & { email2
 type RecordFormProps = {
     source?: RecordType,
     go_to: (path: string, q?: { [key: string]: string }) => void,
-    on_confirm: (args: EditType) => void,
+    on_confirm: (args: TableData) => void,
 };
 
 export function RecordForm(props: RecordFormProps) {
@@ -106,26 +106,26 @@ export function RecordForm(props: RecordFormProps) {
         set_dialog_content({type: 'loading'});
 
         // @ts-ignore
-        let promise = is_editing ? edit_record(source, pending) : create_record(pending);
-        promise.then((x: TableData) => {
-            set_dialog_content({
-                type: 'success',
-                label: (is_editing ? 'Editing' : 'Creating') + ' record success',
-                content: 'Record was ' + (is_editing ? 'updated' : 'created'),
-                buttons: {
-                    ok: {
-                        label: 'Proceed',
-                        disabled: false,
-                        on_click: () => {
-                            go_to('/all', {sel: pending?.email || ''});
-                            set_dialog_content(undefined);
-                            pending && on_confirm(pending);
+        (is_editing ? edit_record(source, pending) : create_record(pending))
+            .then((x: TableData) => {
+                set_dialog_content({
+                    type: 'success',
+                    label: (is_editing ? 'Editing' : 'Creating') + ' record success',
+                    content: 'Record was ' + (is_editing ? 'updated' : 'created'),
+                    buttons: {
+                        ok: {
+                            label: 'Proceed',
+                            disabled: false,
+                            on_click: () => {
+                                go_to('/all', {sel: pending?.email || ''});
+                                set_dialog_content(undefined);
+                                pending && on_confirm(x);
+                            },
                         },
                     },
-                },
-            });
-        }).catch((e: any) => {
-            if (e.path) {
+                });
+            }).catch((e: any) => {
+            if (['name', 'phone', 'email', 'email2', 'country', 'state', 'city'].includes(e.path)) {
                 set_errors({[e.path]: e.message});
                 set_dialog_content(undefined);
             } else {

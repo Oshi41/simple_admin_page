@@ -53,7 +53,11 @@ export default function App() {
         {url.pathname == '/edit' && state_manager.active_item &&
             <RecordForm go_to={go_to}
                         source={state_manager.active_item}
-                        on_confirm={x => state_manager.active_item = x}/>
+                        on_confirm={x => {
+                            const index = state_manager.selection[0];
+                            table_data[index] = x;
+                            set_table_data([...table_data]);
+                        }}/>
         }
 
         {url.pathname == '/create' &&

@@ -63,11 +63,12 @@ async function validate_patch_mw(req: CustomRequestType) {
     const updated: Partial<RecordType> = modify(_.omit(req.$id, ['_id']), {$set: set, $unset: unset});
     client_edit_validate(updated, true);
 
+
     for (let prop of pk) {
         const l = _.pick(req.$id, [prop]);
         const r = _.pick(updated, [prop]);
 
-        if (!_.isEmpty(l) && !_.isEmpty(r) && !_.eq(l, r)) {
+        if (!_.isEmpty(l) && !_.isEmpty(r) && !_.isEqual(l, r)) {
             await check_db_existence(r);
         }
     }

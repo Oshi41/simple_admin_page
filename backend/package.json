@@ -31,6 +31,7 @@
     "mocha": "latest",
     "ts-node": "latest",
     "typescript": "latest",
-    "sinon": "latest"
+    "sinon": "latest",
+    "cross-env": "latest"
   }
 }

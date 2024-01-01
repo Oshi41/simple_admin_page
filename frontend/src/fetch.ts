@@ -1,7 +1,7 @@
 import {RecordType} from "./schema";
 import _ from 'lodash';
-import {PhoneNumberUtil} from "google-libphonenumber";
-import {City, Country, State} from "country-state-city";
+import {PhoneNumber, PhoneNumberUtil} from "google-libphonenumber";
+import {City, Country, ICity, ICountry, IState, State} from "country-state-city";
 
 function sleep(mls: number) {
     return new Promise(resolve => {
@@ -17,7 +17,7 @@ function sleep(mls: number) {
  * @throws {Error & {path: string}} - on http 400
  * @throws Error - on http 500
  */
-async function create_record(r: Partial<RecordType & { email2: string }>): Promise<RecordType> {
+async function create_record_prod(r: Partial<RecordType & { email2: string }>): Promise<RecordType> {
     const resp = await fetch('/record', {
         method: 'POST',
         body: JSON.stringify(r),
@@ -37,6 +37,22 @@ async function create_record(r: Partial<RecordType & { email2: string }>): Promi
     }
 
     throw new Error('Wrong status: ' + resp.status);
+}
+
+async function create_record_dev(r: Partial<RecordType & { email2: string }>): Promise<RecordType> {
+    await sleep(1000 * 3);
+
+    if (Math.random() > 0.9)
+        throw new Error('Internal error');
+
+    // Error occured
+    if (Math.random() > 0.4) {
+        const ids = 'name email phone country state city email2'.split(' ');
+        const index = Math.floor(Math.random() * ids.length);
+        throw Object.assign(new Error('Some useful message'), {path: ids[index]});
+    }
+
+    return _.omit(r, 'email2') as RecordType;
 }
 
 /**
@@ -59,7 +75,7 @@ async function get_all_records_prod(): Promise<RecordType[]> {
 
 async function get_all_records_dev(): Promise<RecordType[]> {
     // some delay
-    await sleep(Math.random() * 3_000);
+    await sleep(2_000);
     const rand_name = () => {
         const name = Math.floor(Math.random() * 1_000_000).toString()
             .replace(/0/g, 'a')
@@ -84,7 +100,7 @@ async function get_all_records_dev(): Promise<RecordType[]> {
     const result: RecordType[] = [];
     for (let i = 0; i < 25; i++) {
         const name = rand_name();
-        const email = name + '@mail.copm';
+        const email = i + '@mail.com';
         const util = PhoneNumberUtil.getInstance();
         const region = rand_elem(util.getSupportedRegions());
         const icountry = Country.getCountryByCode(region);
@@ -92,7 +108,7 @@ async function get_all_records_dev(): Promise<RecordType[]> {
         const icity = rand_elem(City.getCitiesOfState(icountry?.isoCode || '', istate?.isoCode));
 
         let phone = util.getExampleNumber('US').getNationalNumberOrDefault().toString();
-        phone = '+'+phone.substring(0, phone.length - 4) + Math.floor(Math.random() * 1000).toString().padStart(4, '0')
+        phone = '+' + phone.substring(0, phone.length - 4) + Math.floor(Math.random() * 1000).toString().padStart(4, '0')
         result.push({
             name,
             email,
@@ -124,7 +140,7 @@ async function get_all_records_dev(): Promise<RecordType[]> {
  * @throws {Error & {path: string}} - on http 400
  * @throws Error - on http 500
  */
-async function edit_record($id: Partial<RecordType>, edited: Partial<RecordType>) {
+async function edit_record_prod($id: Partial<RecordType>, edited: Partial<RecordType>) {
     $id = _.pick($id, 'email');
     type t = keyof RecordType;
     const set_fields: t[] = ['name', 'email', 'phone', 'country', 'state', 'city'];
@@ -156,10 +172,119 @@ async function edit_record($id: Partial<RecordType>, edited: Partial<RecordType>
     throw new Error('Wrong status: ' + resp.status);
 }
 
+async function edit_record_dev($id: Partial<RecordType>, edited: Partial<RecordType>) {
+    await sleep(Math.random() * 1000 * 2);
+    if (Math.random() > 0.9)
+        throw new Error('Internal error');
+
+    // Error occured
+    if (Math.random() > 0.4) {
+        const ids = 'name email phone country state city $id'.split(' ');
+        const index = Math.floor(Math.random() * ids.length);
+        throw Object.assign(new Error('Some usufull message'), {path: ids[index]});
+    }
+
+    return Object.assign({...$id, ...edited});
+}
+
+async function delete_record_dev($id: Partial<RecordType>) {
+    await sleep(Math.random() * 1000 * 2);
+    if (Math.random() > 0.9)
+        throw new Error('Internal error');
+
+    return true;
+}
+
+async function delete_record_prod($id: Partial<RecordType>) {
+    $id = _.pick($id, ['email', 'phone']);
+    const resp = await fetch('/record', {
+        method: 'DELETE',
+        body: JSON.stringify($id),
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+    });
+
+    if (resp.ok)
+        return true;
+
+    throw new Error(await resp.text());
+}
+
 const is_dev = true;
+
+export type TableData = RecordType & {
+    _location: [ICountry | undefined, IState | undefined, ICity | undefined],
+    _phone?: PhoneNumber,
+};
+
+function locate(from: Partial<RecordType>): [ICountry | undefined, IState | undefined, ICity | undefined] {
+    if (!from)
+        return [undefined, undefined, undefined];
+
+    const icountry = Country.getCountryByCode(from.country || '');
+    const istate = State.getStateByCodeAndCountry(from.state || '', from.country || '');
+    const cities = City.getCitiesOfState(from.country || '', from.state || '');
+    const icity = cities.find(x => x.name == from.city);
+    return [icountry, istate, icity];
+}
+
+export const enrich_data = (data: RecordType[]): TableData[] => {
+    const number_util = PhoneNumberUtil.getInstance();
+    const result: TableData[] = [];
+
+    for (let elem of data) {
+        let _phone: PhoneNumber | undefined = undefined;
+        try {
+            _phone = number_util.parse(elem.phone, elem.country);
+        } catch (e) {
+            // ignored
+        }
+        const add: TableData = {
+            ...elem,
+            _phone,
+            _location: locate(elem),
+        };
+        result.push(add);
+    }
+
+    return result;
+}
 
 /**
  * Request all records
  * @throws Error on server side errors
  */
-export const get_all_records = is_dev ? get_all_records_dev : get_all_records_prod;
+export const get_all_records = async (): Promise<TableData[]> => {
+    const data = await (is_dev ? get_all_records_dev : get_all_records_prod)();
+    return enrich_data(data);
+};
+
+/**
+ * PATCH edit request
+ * @param $id - id of editing object (email and/or phone fields)
+ * @param edited - resulting object of editing
+ */
+export const edit_record = async ($id: Partial<RecordType>, edited: Partial<RecordType>): Promise<TableData> => {
+    const resp = await (is_dev ? edit_record_dev : edit_record_prod)($id, edited);
+    return enrich_data([resp])[0];
+};
+
+/**
+ * POST creating record request
+ * @param r - creating record
+ */
+export const create_record = async (r: Partial<RecordType & { email2: string }>) => {
+    const resp = await (is_dev ? create_record_dev : create_record_prod)(r);
+    return enrich_data([resp])[0];
+};
+
+/**
+ * Requesting delete record
+ * @param r - ID of deleting element (must include email/phone fields)
+ */
+export const delete_record = async (r: Partial<RecordType>) => {
+    return await (is_dev ? delete_record_dev : delete_record_dev)(r);
+};
+

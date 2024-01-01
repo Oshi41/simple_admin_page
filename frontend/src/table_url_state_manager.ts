@@ -7,7 +7,7 @@ const q_sel_name = 'sel';
 
 export class Table_url_state_manager {
     private _ref: React.MutableRefObject<MUIDataTableState | undefined>;
-    private _data: React.MutableRefObject<any[] | undefined>;
+    private _data: any[];
     private mark_dirty: () => void;
 
     /**
@@ -15,7 +15,7 @@ export class Table_url_state_manager {
      * @param data - data items reference
      * @param mark_dirty - re-render function, for example, simle iterator based on useState
      */
-    constructor(ref: React.MutableRefObject<MUIDataTableState | undefined>, data: React.MutableRefObject<any[] | undefined>, mark_dirty: () => void) {
+    constructor(ref: React.MutableRefObject<MUIDataTableState | undefined>, data: any[], mark_dirty: () => void) {
         this._ref = ref;
         this._data = data;
         this.mark_dirty = mark_dirty;
@@ -78,7 +78,7 @@ export class Table_url_state_manager {
      * Returns actual table selection according to URL
      */
     get selection(): number[] {
-        const data = this._data.current;
+        const data = this._data;
         if (!data?.length)
             return [];
 
@@ -98,7 +98,7 @@ export class Table_url_state_manager {
      */
     set selection(selection: number[]) {
         let value = '';
-        const data = this._data.current;
+        const data = this._data;
         if (data?.length)
             value = selection.map(i => data[i]?.email).filter(Boolean).join(',')
         setQParam(q_sel_name, value);
@@ -117,14 +117,17 @@ export class Table_url_state_manager {
      * Table rows data
      */
     get data(): any[] | undefined {
-        return this._data.current;
+        return this._data;
     }
 
-    /**
-     * Sets table data
-     * @param data - new table data
-     */
-    set data(data: any[] | undefined) {
-        this._data.current = data;
+    get active_item(): any | undefined {
+        const active_item = this.data?.[this.selection?.[0]];
+        return active_item;
+    }
+
+    set active_item(obj: any) {
+        const i = this.active_item;
+        if (i)
+            Object.assign(i, obj);
     }
 }

@@ -1,25 +1,17 @@
-import React, {useCallback, useMemo, useState} from "react";
-import {Box, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography} from "@mui/material";
+import React, {useCallback, useMemo} from "react";
+import {
+    Box,
+    IconButton,
+    Stack,
+    Tooltip
+} from "@mui/material";
 import MUIDataTable, {MUIDataTableColumn, MUIDataTableMeta} from "mui-datatables";
 import {Table_url_state_manager} from "../table_url_state_manager";
 import {PhoneNumberFormat, PhoneNumberUtil} from 'google-libphonenumber';
-import {RecordType} from "../schema";
-import {City, Country, ICity, ICountry, IState, State} from "country-state-city";
-import {Delete, Edit} from "@mui/icons-material";
-import {useLocation} from "../hooks";
+import {Delete, Edit, Add} from "@mui/icons-material";
+import {CustomDialog} from "../contorls/CustomDialog";
 
 const number_util = PhoneNumberUtil.getInstance();
-
-function locate(from: Partial<RecordType>): [ICountry | undefined, IState | undefined, ICity | undefined] {
-    if (!from)
-        return [undefined, undefined, undefined];
-
-    const icountry = Country.getCountryByCode(from.country || '');
-    const istate = State.getStateByCodeAndCountry(from.state || '', from.country || '');
-    const cities = City.getCitiesOfState(from.country || '', from.state || '');
-    const icity = cities.find(x => x.name == from.city);
-    return [icountry, istate, icity];
-}
 
 function date2str(d: Date | string): string {
     return new Date(d).toLocaleDateString('en-us', {
@@ -35,12 +27,12 @@ function date2str(d: Date | string): string {
 
 type RecordsPageProps = {
     state_manager: Table_url_state_manager,
+    loading: boolean,
+    go_to: (path: string, q?: { [key: string]: string }) => void,
 };
 
-export function RecordsPage(props: RecordsPageProps) {
-    let {state_manager} = props;
-    const [loading, set_loading] = useState(false);
-    const [url, set_url] = useLocation();
+export function RecordsTable(props: RecordsPageProps) {
+    let {state_manager, go_to, loading} = props;
     const find_data_from_raw = useCallback((tableMeta: MUIDataTableMeta) => {
         const possible_emails = tableMeta.rowData.filter(x => typeof x == 'string' && x.includes('@'));
         const data_item = state_manager.data?.find(x => possible_emails.includes(x.email));
@@ -173,24 +165,19 @@ export function RecordsPage(props: RecordsPageProps) {
                     filter: false,
                     draggable: false,
                     customBodyRender: (d, tableMeta) => {
-                        const navigate_to = (path: string) => {
-                            state_manager.selection = [tableMeta.rowIndex];
-                            set_url(prevState => {
-                                prevState.pathname = path;
-                                return prevState;
-                            });
-                        };
+                        const {email} = find_data_from_raw(tableMeta) || {};
+
                         return <Stack direction='row'>
                             <IconButton onClick={() => {
-                                navigate_to('/edit');
+                                go_to('/edit', {sel: email});
                             }}><Edit/></IconButton>
                             <IconButton onClick={() => {
-                                navigate_to('/delete');
+                                go_to('/delete', {sel: email});
                             }}><Delete/></IconButton>
                         </Stack>;
                     },
                 },
-            }
+            },
         ];
         return cols;
     }, [
@@ -198,18 +185,19 @@ export function RecordsPage(props: RecordsPageProps) {
         state_manager.sort,
         state_manager.selection,
         state_manager.table_filters,
-        set_url,
+        go_to,
     ]);
 
+    function CustomToolbar() {
+        return <Tooltip title='Create new record'>
+            <IconButton onClick={() => go_to('/create', {sel: ''})}>
+                <Add/>
+            </IconButton>
+        </Tooltip>
+    };
+
     return <Box>
-        <Dialog open={loading}>
-            <DialogTitle>
-                <Typography>Loading...</Typography>
-            </DialogTitle>
-            <DialogContent>
-                <CircularProgress/>
-            </DialogContent>
-        </Dialog>
+        {CustomDialog(loading ? {type: 'loading'} : undefined)}
 
         <MUIDataTable columns={columns}
                       data={state_manager.data || []}
@@ -230,7 +218,8 @@ export function RecordsPage(props: RecordsPageProps) {
                           onTableChange: (action, tableState) => {
                               state_manager.update_state(tableState);
                           },
-                          onFilterChange: state_manager.save_filter_to_url,
+                          onFilterChange: () => state_manager.save_filter_to_url(),
+                          customToolbar: () => <CustomToolbar/>,
                       }}
         />
     </Box>;
